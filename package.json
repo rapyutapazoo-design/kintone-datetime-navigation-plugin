@@ -1,0 +1,11 @@
+{
+  "name": "kintone-datetime-navigation-plugin",
+  "version": "1.0.0",
+  "description": "Navigate Kintone records by Date or Datetime instead of Record Number",
+  "scripts": {
+    "build": "kintone-plugin-packer src"
+  },
+  "devDependencies": {
+    "@kintone/plugin-packer": "^9.0.0"
+  }
+}

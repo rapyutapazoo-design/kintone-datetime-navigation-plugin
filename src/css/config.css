@@ -1,0 +1,79 @@
+.settings {
+  display: block;
+  margin: 30px;
+}
+
+.settings-heading {
+  font-size: 24px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  border-bottom: 2px solid #ccc;
+  padding-bottom: 10px;
+}
+
+/* kintone公式のCSSを模倣・補完する簡易スタイル */
+.kintoneplugin-desc {
+  margin-bottom: 20px;
+  color: #333;
+}
+
+.kintoneplugin-row {
+  margin-bottom: 25px;
+}
+
+.kintoneplugin-label {
+  font-weight: bold;
+  margin-bottom: 8px;
+}
+
+.kintoneplugin-require {
+  color: #e51c23;
+  margin-left: 4px;
+}
+
+.kintoneplugin-select-outer {
+  display: inline-block;
+}
+
+.kintoneplugin-select {
+  display: inline-block;
+}
+
+.kintoneplugin-select select {
+  font-size: 14px;
+  border: 1px solid #e3e7e8;
+  height: 48px;
+  padding: 0 16px;
+  background-color: #f7f9fa;
+  min-width: 250px;
+  cursor: pointer;
+}
+
+.kintoneplugin-button-dialog-ok {
+  background-color: #3498db;
+  color: #fff;
+  border: 1px solid #3498db;
+  height: 48px;
+  padding: 0 32px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-right: 15px;
+}
+
+.kintoneplugin-button-dialog-ok:hover {
+  background-color: #2980b9;
+}
+
+.kintoneplugin-button-dialog-cancel {
+  background-color: #f7f9fa;
+  color: #3498db;
+  border: 1px solid #e3e7e8;
+  height: 48px;
+  padding: 0 32px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.kintoneplugin-button-dialog-cancel:hover {
+  background-color: #e3e7e8;
+}

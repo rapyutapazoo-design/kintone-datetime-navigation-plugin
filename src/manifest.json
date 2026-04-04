@@ -1,0 +1,42 @@
+{
+  "manifest_version": 1,
+  "version": 1,
+  "type": "APP",
+  "name": {
+    "en": "Datetime Navigation Plugin",
+    "ja": "日時基準ナビゲーションプラグイン"
+  },
+  "description": {
+    "en": "Navigate to the next or previous record based on a specific Date or Datetime field.",
+    "ja": "指定した日時（または日付）フィールドを基準にして、前後レコードへ遷移するボタンを配置します。"
+  },
+  "icon": "image/icon.png",
+  "homepage_url": {
+    "en": "https://example.com",
+    "ja": "https://example.com"
+  },
+  "desktop": {
+    "js": [
+      "js/desktop.js"
+    ],
+    "css": []
+  },
+  "mobile": {
+    "js": [
+      "js/desktop.js"
+    ],
+    "css": []
+  },
+  "config": {
+    "html": "html/config.html",
+    "js": [
+      "js/config.js"
+    ],
+    "css": [
+      "css/config.css"
+    ],
+    "required_params": [
+      "targetFieldCode"
+    ]
+  }
+}
