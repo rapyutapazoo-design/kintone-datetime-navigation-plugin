@@ -44,30 +44,51 @@
 
     var rejected = false; // 矢印の左に収まらなかった場合 true（以後は従来位置に固定。resize で再判定）
     var busy = false;
+    var disposed = false; // cleanup 済みなら true（以後のリスナー・監視は登録しない）
+    var cleanup = null; // 下で定義（tryPlace からも呼ぶため先に宣言）
 
     var toFallback = function() {
       if (wrapper.parentNode !== fallbackParent) fallbackParent.appendChild(wrapper);
       wrapper.style.marginLeft = '20px';
       wrapper.style.marginRight = '';
+      wrapper.style.verticalAlign = '';
     };
 
     var tryPlace = function() {
       if (busy) return;
       busy = true;
       try {
-        var arrow = rejected ? null : Core.findFirstMatch(document, Core.ARROW_SELECTORS);
-        if (!arrow || !arrow.parentNode || arrow.contains(wrapper)) {
-          // 再描画で wrapper が消えていたら従来位置へ戻す（同一要素の再挿入なので二重にならない）
-          if (!wrapper.parentNode) toFallback();
+        // 詳細画面を離れた（従来位置の親が文書から外れた）場合は監視を止め、別画面へ挿入しない
+        if (!document.contains(fallbackParent)) {
+          cleanup();
           return;
         }
+        // 再描画で wrapper が文書から外れていたら従来位置へ戻すだけにする（矢印へは再挿入しない）
+        if (!document.contains(wrapper)) {
+          toFallback();
+          return;
+        }
+        var arrow = rejected ? null : Core.findFirstMatch(document, Core.ARROW_SELECTORS, function(el) {
+          return Core.isUsableArrowRect(el.getBoundingClientRect());
+        });
+        if (!arrow || !arrow.parentNode || arrow.contains(wrapper)) return;
+        // 挿入前後のツールバー高さ（table-cell の右セルが広がって左セルが潰れる崩れの検出用。測定は挿入時の1回のみ）
+        var beforeHeight = null;
+        var afterHeight = null;
+        var measured = null;
         if (wrapper.nextSibling !== arrow) {
+          measured = (arrow.closest && arrow.closest('.gaia-argoui-app-toolbar')) || fallbackParent;
+          beforeHeight = measured.offsetHeight;
           arrow.parentNode.insertBefore(wrapper, arrow);
           wrapper.style.marginLeft = '0';
           wrapper.style.marginRight = '12px';
+          wrapper.style.verticalAlign = 'middle';
+          afterHeight = measured.offsetHeight;
         }
-        if (!Core.isLeftOnSameRow(wrapper.getBoundingClientRect(), arrow.getBoundingClientRect())) {
-          rejected = true; // 幅不足などで折り返す／重なる場合は従来位置へ
+        var arrowRect = arrow.getBoundingClientRect();
+        if (!Core.isLeftOnSameRow(wrapper.getBoundingClientRect(), arrowRect) ||
+            Core.didLayoutBreak(beforeHeight, afterHeight, arrowRect.right, window.innerWidth)) {
+          rejected = true; // 幅不足などで折り返す／重なる／ツールバーが崩れる場合は従来位置へ
           toFallback();
         }
       } finally {
@@ -77,24 +98,34 @@
 
     var observer = null;
     var timer = null;
+    var rafId = null;
+    var lastWidth = window.innerWidth;
     var onResize = function() {
-      // 幅が変わったら再判定（収まらず従来位置にいる場合も、広がれば矢印の左へ戻す）
-      rejected = false;
-      tryPlace();
+      // 幅が変わったときだけ、次の描画フレームで1回再判定する（収まらず従来位置にいる場合も、広がれば矢印の左へ戻す）
+      if (window.innerWidth === lastWidth || rafId !== null) return;
+      rafId = window.requestAnimationFrame(function() {
+        rafId = null;
+        lastWidth = window.innerWidth;
+        rejected = false;
+        tryPlace();
+      });
     };
-    var cleanup = function() {
+    cleanup = function() {
       if (observer) { observer.disconnect(); observer = null; }
       if (timer) { clearTimeout(timer); timer = null; }
+      if (rafId !== null) { window.cancelAnimationFrame(rafId); rafId = null; }
       window.removeEventListener('resize', onResize);
-      window._dtnavPlaceCleanup = null;
+      disposed = true;
+      if (window._dtnavPlaceCleanup === cleanup) window._dtnavPlaceCleanup = null;
     };
     window._dtnavPlaceCleanup = cleanup;
 
     tryPlace();
+    if (disposed) return; // 初回判定で破棄された場合はリスナー・監視を登録しない
     window.addEventListener('resize', onResize);
     if (typeof MutationObserver === 'function') {
-      // kintone の描画は非同期なので、矢印の出現・再描画を一定時間だけ監視する（無限には待たない）
-      observer = new MutationObserver(function() { if (!busy) tryPlace(); });
+      // kintone の描画は非同期なので、矢印の出現・再描画を一定時間だけ監視する（無限には待たない。5秒後は resize のみで再判定）
+      observer = new MutationObserver(function() { tryPlace(); });
       observer.observe(document.body, { childList: true, subtree: true });
       timer = setTimeout(function() {
         if (observer) { observer.disconnect(); observer = null; }
@@ -197,7 +228,6 @@
     navContainer.appendChild(prevButton);
     navContainer.appendChild(nextButton);
     header.appendChild(navContainer);
-    if (!isMobile) placeNextToArrows(navContainer, header);
 
     var appId = getAppId(isMobile);
 
@@ -239,6 +269,8 @@
       }
       navContainer.insertBefore(toggleLabel, navContainer.firstChild);
     }
+    // トグル追加後の最終的な幅で配置を判定するため、navContainer の完成後に呼ぶ
+    if (!isMobile) placeNextToArrows(navContainer, header);
 
     /**
      * 絞り込み条件を組み立てる

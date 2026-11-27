@@ -200,7 +200,47 @@ test('findFirstMatch: 候補を順に試し、無効セレクタは無視する'
   assert.equal(Core.findFirstMatch(root, ['.a']), null);
   assert.equal(Core.findFirstMatch(null, ['.a']), null);
   assert.equal(Core.findFirstMatch(root, null), null);
-  assert.ok(Core.ARROW_SELECTORS.length > 0);
+  assert.deepEqual(Core.ARROW_SELECTORS, [
+    '.gaia-argoui-app-show-toolbar .gaia-argoui-app-pager',
+    '.gaia-argoui-app-toolbar .gaia-argoui-app-pager'
+  ]);
+  Core.ARROW_SELECTORS.forEach((sel) => assert.ok(sel.indexOf('[class*=') === -1));
+});
+
+test('findFirstMatch: accept 条件を満たす要素だけを採用する', () => {
+  const hidden = { id: 'hidden', w: 0 };
+  const shown = { id: 'shown', w: 96 };
+  const root = { querySelectorAll: (sel) => (sel === '.a' ? [hidden] : sel === '.b' ? [hidden, shown] : []) };
+  const accept = (el) => el.w > 0;
+  assert.equal(Core.findFirstMatch(root, ['.a', '.b'], accept), shown);
+  assert.equal(Core.findFirstMatch(root, ['.a'], accept), null);
+  assert.equal(Core.findFirstMatch({ querySelector: () => ({}) }, ['.a'], accept), null);
+});
+
+test('findFirstMatch: accept 経路で querySelectorAll が例外を投げても次の候補へ進む／無ければ null', () => {
+  const ok = { id: 'ok' };
+  const root = { querySelectorAll: (sel) => { if (sel === '!!') throw new Error('bad'); return sel === '.b' ? [ok] : []; } };
+  const accept = () => true;
+  assert.equal(Core.findFirstMatch(root, ['!!', '.b'], accept), ok);
+  assert.equal(Core.findFirstMatch(root, ['!!'], accept), null);
+});
+
+test('didLayoutBreak: 高さ増加・右端超え・null 入力の判定', () => {
+  assert.equal(Core.didLayoutBreak(48, 48, 860, 1200), false); // 増えない
+  assert.equal(Core.didLayoutBreak(48, 40, 860, 1200), false); // 減る
+  assert.equal(Core.didLayoutBreak(48, 96, 860, 1200), true); // 増える
+  assert.equal(Core.didLayoutBreak(48, 48, 1300, 1200), true); // 右端超え
+  assert.equal(Core.didLayoutBreak(48, 48, 1200, 1200), false); // ちょうど
+  assert.equal(Core.didLayoutBreak(null, null, null, null), false);
+  assert.equal(Core.didLayoutBreak(null, 96, 860, 1200), false);
+  assert.equal(Core.didLayoutBreak(undefined, undefined, 1300, 1200), true);
+});
+
+test('isUsableArrowRect: 幅・高さが両方 0 より大きいときだけ採用', () => {
+  assert.equal(Core.isUsableArrowRect({ width: 96, height: 48 }), true);
+  assert.equal(Core.isUsableArrowRect({ width: 0, height: 48 }), false);
+  assert.equal(Core.isUsableArrowRect({ width: 96, height: 0 }), false);
+  assert.equal(Core.isUsableArrowRect(null), false);
 });
 
 test('isLeftOnSameRow: 左隣・折り返し・重なり・画面外の判定', () => {
@@ -214,5 +254,7 @@ test('isLeftOnSameRow: 左隣・折り返し・重なり・画面外の判定', 
   assert.equal(Core.isLeftOnSameRow({ left: -50, right: 200, top: 10, bottom: 50, width: 250, height: 40 }, arrow), false);
   // 非表示
   assert.equal(Core.isLeftOnSameRow({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }, arrow), false);
+  // 折り返して1段下（縦範囲が少し重なっても中心線がずれていれば別の段）
+  assert.equal(Core.isLeftOnSameRow({ left: 500, right: 790, top: 40, bottom: 80, width: 290, height: 40 }, arrow), false);
   assert.equal(Core.isLeftOnSameRow(null, arrow), false);
 });
