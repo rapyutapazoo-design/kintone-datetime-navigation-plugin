@@ -13,6 +13,49 @@
     </div>
   </div>
   
+  <div class="kintoneplugin-row">
+    <div class="kintoneplugin-label">施設フィールド（任意）</div>
+    <div class="kintoneplugin-select-outer">
+      <div class="kintoneplugin-select">
+        <select id="facility-field-select">
+          <option value="">-----</option>
+        </select>
+      </div>
+    </div>
+    <p class="kintoneplugin-hint">選択すると、レコード詳細に「同一施設のみ」トグルが表示されます。「-----」の場合は絞り込みなし（従来動作）です。</p>
+    <div class="kintoneplugin-hint">利用可能な施設名:</div>
+    <div id="facility-options-list" class="kintoneplugin-readonly-box"></div>
+  </div>
+
+  <div class="kintoneplugin-row">
+    <div class="kintoneplugin-label">施設グループ（任意）</div>
+    <textarea id="facility-groups-text" class="kintoneplugin-textarea" rows="4" placeholder="ゲストルーム（時間利用）,ゲストルーム（宿泊）"></textarea>
+    <p class="kintoneplugin-hint">1行に1グループ。施設名を「,」「，」「、」で区切って入力します。同じグループの施設は「同一施設」として扱われます。</p>
+    <p class="kintoneplugin-hint">cisco の ROOM_GROUPS（common/utils.js）と同じ内容にしてください。自動同期はされません。</p>
+  </div>
+
+  <div class="kintoneplugin-row">
+    <div class="kintoneplugin-label">除外判定フィールド（任意）</div>
+    <div class="kintoneplugin-select-outer">
+      <div class="kintoneplugin-select">
+        <select id="exclude-field-select">
+          <option value="">-----</option>
+        </select>
+      </div>
+    </div>
+    <div id="exclude-options-wrapper" style="display:none;">
+      <div class="kintoneplugin-hint">選択肢:</div>
+      <div id="exclude-options-list" class="kintoneplugin-readonly-box"></div>
+    </div>
+    <p class="kintoneplugin-hint" id="exclude-status-hint" style="display:none;">プロセス管理のステータスを選択した場合は、ステータス名を正確に入力してください。</p>
+  </div>
+
+  <div class="kintoneplugin-row">
+    <div class="kintoneplugin-label">除外する値（任意）</div>
+    <textarea id="exclude-values-text" class="kintoneplugin-textarea" rows="3" placeholder="キャンセル済み"></textarea>
+    <p class="kintoneplugin-hint">1行に1値。ここに指定した値のレコードは前後ナビゲーションの対象から常に除外されます。STATUS（プロセス管理）選択時はステータス名を正確に入力してください。</p>
+  </div>
+
   <p class="kintoneplugin-row">
     <button type="button" id="plugin-submit" class="kintoneplugin-button-dialog-ok">保存する</button>
     <button type="button" id="plugin-cancel" class="kintoneplugin-button-dialog-cancel">キャンセル</button>
