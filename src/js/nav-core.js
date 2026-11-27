@@ -158,7 +158,43 @@
     }
   }
 
+  // PC 詳細画面の標準レコード移動矢印（∧∨）コンテナの探索候補（クラス名は非公開のため複数候補を順に試す）
+  var ARROW_SELECTORS = [
+    '.gaia-argoui-app-toolbar-pager',
+    '.gaia-app-statusbar-recordnavi',
+    '.gaia-argoui-record-navigation',
+    '.gaia-app-statusbar [class*="pager"]',
+    '.gaia-app-statusbar [class*="recordnavi"]',
+    '.gaia-argoui-app-toolbar [class*="pager"]',
+    '.gaia-argoui-app-toolbar [class*="recordnavi"]'
+  ];
+
+  // セレクタ候補を順に試し、最初に見つかった要素を返す（不正セレクタは無視、無ければ null）
+  function findFirstMatch(root, selectors) {
+    if (!root || typeof root.querySelector !== 'function' || !Array.isArray(selectors)) return null;
+    for (var i = 0; i < selectors.length; i++) {
+      try {
+        var el = root.querySelector(selectors[i]);
+        if (el) return el;
+      } catch (e) {
+        // 無効なセレクタは次の候補へ
+      }
+    }
+    return null;
+  }
+
+  // wrapper が矢印の左隣（同じ段・重ならない）に収まっているか。rect は getBoundingClientRect 相当
+  function isLeftOnSameRow(wrapperRect, arrowRect) {
+    if (!wrapperRect || !arrowRect) return false;
+    if (wrapperRect.width === 0 && wrapperRect.height === 0) return false;
+    var sameRow = wrapperRect.top < arrowRect.bottom && wrapperRect.bottom > arrowRect.top;
+    return sameRow && wrapperRect.right <= arrowRect.left + 1 && wrapperRect.left >= 0;
+  }
+
   var api = {
+    ARROW_SELECTORS: ARROW_SELECTORS,
+    findFirstMatch: findFirstMatch,
+    isLeftOnSameRow: isLeftOnSameRow,
     escapeQueryValue: escapeQueryValue,
     parseJsonArray: parseJsonArray,
     parseGroupsText: parseGroupsText,

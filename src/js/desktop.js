@@ -36,6 +36,72 @@
     return;
   }
 
+  // PC版: wrapper を標準のレコード移動矢印（∧∨）の左隣へ移す。
+  // 矢印が見つからない／同じ段に収まらない場合は fallbackParent（従来のプロセス管理ボタンの下の段）のままにする
+  var ARROW_WAIT_MS = 5000;
+  var placeNextToArrows = function(wrapper, fallbackParent) {
+    if (window._dtnavPlaceCleanup) window._dtnavPlaceCleanup(); // 前回の監視・resize リスナーを破棄
+
+    var rejected = false; // 矢印の左に収まらなかった場合 true（以後は従来位置に固定。resize で再判定）
+    var busy = false;
+
+    var toFallback = function() {
+      if (wrapper.parentNode !== fallbackParent) fallbackParent.appendChild(wrapper);
+      wrapper.style.marginLeft = '20px';
+      wrapper.style.marginRight = '';
+    };
+
+    var tryPlace = function() {
+      if (busy) return;
+      busy = true;
+      try {
+        var arrow = rejected ? null : Core.findFirstMatch(document, Core.ARROW_SELECTORS);
+        if (!arrow || !arrow.parentNode || arrow.contains(wrapper)) {
+          // 再描画で wrapper が消えていたら従来位置へ戻す（同一要素の再挿入なので二重にならない）
+          if (!wrapper.parentNode) toFallback();
+          return;
+        }
+        if (wrapper.nextSibling !== arrow) {
+          arrow.parentNode.insertBefore(wrapper, arrow);
+          wrapper.style.marginLeft = '0';
+          wrapper.style.marginRight = '12px';
+        }
+        if (!Core.isLeftOnSameRow(wrapper.getBoundingClientRect(), arrow.getBoundingClientRect())) {
+          rejected = true; // 幅不足などで折り返す／重なる場合は従来位置へ
+          toFallback();
+        }
+      } finally {
+        busy = false;
+      }
+    };
+
+    var observer = null;
+    var timer = null;
+    var onResize = function() {
+      // 幅が変わったら再判定（収まらず従来位置にいる場合も、広がれば矢印の左へ戻す）
+      rejected = false;
+      tryPlace();
+    };
+    var cleanup = function() {
+      if (observer) { observer.disconnect(); observer = null; }
+      if (timer) { clearTimeout(timer); timer = null; }
+      window.removeEventListener('resize', onResize);
+      window._dtnavPlaceCleanup = null;
+    };
+    window._dtnavPlaceCleanup = cleanup;
+
+    tryPlace();
+    window.addEventListener('resize', onResize);
+    if (typeof MutationObserver === 'function') {
+      // kintone の描画は非同期なので、矢印の出現・再描画を一定時間だけ監視する（無限には待たない）
+      observer = new MutationObserver(function() { if (!busy) tryPlace(); });
+      observer.observe(document.body, { childList: true, subtree: true });
+      timer = setTimeout(function() {
+        if (observer) { observer.disconnect(); observer = null; }
+      }, ARROW_WAIT_MS);
+    }
+  };
+
   // レコード詳細画面の表示時イベント（PC版とモバイル版の両方に対応）
   kintone.events.on(['app.record.detail.show', 'mobile.app.record.detail.show'], function(event) {
     var record = event.record;
@@ -49,6 +115,7 @@
       oldContainer.parentNode.removeChild(oldContainer);
     }
     window._mobileSwipeNavigateRecord = null;
+    if (window._dtnavPlaceCleanup) window._dtnavPlaceCleanup();
     
     // 対象フィールドがレコード内に存在するかチェック
     if (!record[targetFieldCode]) {
@@ -130,6 +197,7 @@
     navContainer.appendChild(prevButton);
     navContainer.appendChild(nextButton);
     header.appendChild(navContainer);
+    if (!isMobile) placeNextToArrows(navContainer, header);
 
     var appId = getAppId(isMobile);
 

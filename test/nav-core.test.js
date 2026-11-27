@@ -193,3 +193,26 @@ test('buildFilters の分岐', () => {
   r = Core.buildFilters({ sameFacilityOnly: false, hasFacility: false, currentFacility: '', facilityFieldCode: '', facilityGroups: [], excludeFieldCode: '', excludeValues: [], record: {} });
   assert.deepEqual(r.filters, []);
 });
+
+test('findFirstMatch: 候補を順に試し、無効セレクタは無視する', () => {
+  const root = { querySelector: (sel) => { if (sel === '!!') throw new Error('bad'); return sel === '.b' ? { id: 'b' } : null; } };
+  assert.deepEqual(Core.findFirstMatch(root, ['.a', '!!', '.b', '.c']), { id: 'b' });
+  assert.equal(Core.findFirstMatch(root, ['.a']), null);
+  assert.equal(Core.findFirstMatch(null, ['.a']), null);
+  assert.equal(Core.findFirstMatch(root, null), null);
+  assert.ok(Core.ARROW_SELECTORS.length > 0);
+});
+
+test('isLeftOnSameRow: 左隣・折り返し・重なり・画面外の判定', () => {
+  const arrow = { left: 800, right: 860, top: 10, bottom: 50 };
+  assert.equal(Core.isLeftOnSameRow({ left: 500, right: 790, top: 10, bottom: 50, width: 290, height: 40 }, arrow), true);
+  // 次の段に落ちた
+  assert.equal(Core.isLeftOnSameRow({ left: 500, right: 790, top: 60, bottom: 100, width: 290, height: 40 }, arrow), false);
+  // 矢印に重なる
+  assert.equal(Core.isLeftOnSameRow({ left: 600, right: 820, top: 10, bottom: 50, width: 220, height: 40 }, arrow), false);
+  // 画面外（左にはみ出し）
+  assert.equal(Core.isLeftOnSameRow({ left: -50, right: 200, top: 10, bottom: 50, width: 250, height: 40 }, arrow), false);
+  // 非表示
+  assert.equal(Core.isLeftOnSameRow({ left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }, arrow), false);
+  assert.equal(Core.isLeftOnSameRow(null, arrow), false);
+});
