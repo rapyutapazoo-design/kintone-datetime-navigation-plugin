@@ -17,12 +17,14 @@
   },
   "desktop": {
     "js": [
+      "js/nav-core.js",
       "js/desktop.js"
     ],
     "css": []
   },
   "mobile": {
     "js": [
+      "js/nav-core.js",
       "js/desktop.js"
     ],
     "css": []
@@ -30,6 +32,7 @@
   "config": {
     "html": "html/config.html",
     "js": [
+      "js/nav-core.js",
       "js/config.js"
     ],
     "css": [

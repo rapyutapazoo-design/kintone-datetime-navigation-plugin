@@ -5,6 +5,32 @@
   var conf = kintone.plugin.app.getConfig(PLUGIN_ID);
   var targetFieldCode = conf.targetFieldCode;
 
+  var Core = window.DatetimeNavCore;
+  if (!Core) {
+    console.error('日時基準ナビゲーション: nav-core.js が読み込まれていません。');
+    return;
+  }
+
+  // 絞り込み関連の設定（未設定なら従来動作）
+  var facilityFieldCode = conf.facilityFieldCode || '';
+  var facilityGroups = Core.parseJsonArray(conf.facilityGroups).filter(function(g) {
+    return Array.isArray(g);
+  });
+  var excludeFieldCode = conf.excludeFieldCode || '';
+  var excludeValues = Core.parseJsonArray(conf.excludeValues);
+
+  var getAppId = function(isMobile) {
+    return isMobile ? kintone.mobile.app.getId() : kintone.app.getId();
+  };
+
+  var getStorage = function() {
+    try {
+      return window.localStorage;
+    } catch (e) {
+      return null;
+    }
+  };
+
   if (!targetFieldCode) {
     console.error('日時基準ナビゲーション: 基準フィールドが設定されていません。プラグイン設定画面から保存してください。');
     return;
@@ -15,6 +41,14 @@
     var record = event.record;
     var currentId = Number(record.$id.value);
     var isMobile = event.type === 'mobile.app.record.detail.show';
+
+    // SPA 内でレコードが切り替わった場合に古い日時・施設のまま残らないよう、
+    // 早期 return より前に既存コンテナとスワイプ用関数を破棄する
+    var oldContainer = document.getElementById('custom-datetime-nav-container');
+    if (oldContainer && oldContainer.parentNode) {
+      oldContainer.parentNode.removeChild(oldContainer);
+    }
+    window._mobileSwipeNavigateRecord = null;
     
     // 対象フィールドがレコード内に存在するかチェック
     if (!record[targetFieldCode]) {
@@ -42,15 +76,25 @@
       }
     }
 
-    if (!header || document.getElementById('custom-datetime-nav-container')) {
-      return event;
-    }
+    if (!header) return event;
+
+    var hasFacility = !!facilityFieldCode && !!record[facilityFieldCode];
+    var currentFacility = hasFacility ? record[facilityFieldCode].value : '';
 
     // ボタン格納用コンテナの作成
     var navContainer = document.createElement('div');
     navContainer.id = 'custom-datetime-nav-container';
-    navContainer.style.display = 'inline-block';
-    navContainer.style.marginLeft = '20px';
+    if (isMobile && hasFacility) {
+      // トグルを表示するときだけ折り返し配置にする（それ以外は従来どおり）
+      navContainer.style.display = 'flex';
+      navContainer.style.flexWrap = 'wrap';
+      navContainer.style.gap = '8px';
+      navContainer.style.marginLeft = '0';
+    } else {
+      navContainer.style.display = 'inline-block';
+      navContainer.style.marginLeft = '20px';
+    }
+    var useFlex = isMobile && hasFacility;
 
     // ボタンの共通スタイル定義（既存のプロセス管理ボタンの横軸に綺麗に並ぶよう微調整）
     var applyBtnStyle = function(btn) {
@@ -68,7 +112,7 @@
     var prevButton = document.createElement('button');
     prevButton.innerText = '◀ 前のレコード';
     applyBtnStyle(prevButton);
-    prevButton.style.marginRight = '8px';
+    prevButton.style.marginRight = useFlex ? '0' : '8px'; // flex 時は gap で間隔を取る
 
     // 次へボタン
     var nextButton = document.createElement('button');
@@ -87,23 +131,79 @@
     navContainer.appendChild(nextButton);
     header.appendChild(navContainer);
 
-    var appId = kintone.app.getId();
+    var appId = getAppId(isMobile);
+
+    // 「同一施設のみ」トグル（施設フィールド設定済みかつレコードに存在する場合のみ）
+    var storageKey = 'dtnav:' + PLUGIN_ID + ':' + appId + ':sameFacility';
+    var sameFacilityOnly = Core.readToggle(getStorage(), storageKey, false);
+    if (hasFacility) {
+      var toggleLabel = document.createElement('label');
+      toggleLabel.style.display = 'inline-flex';
+      toggleLabel.style.alignItems = 'center';
+      toggleLabel.style.height = '40px';
+      toggleLabel.style.verticalAlign = 'middle';
+      toggleLabel.style.marginRight = isMobile ? '0' : '12px';
+      toggleLabel.style.color = '#3498db';
+      toggleLabel.style.fontSize = '14px';
+      toggleLabel.style.cursor = 'pointer';
+      if (isMobile) toggleLabel.style.flexBasis = '100%';
+
+      var toggle = document.createElement('input');
+      toggle.type = 'checkbox';
+      toggle.style.marginRight = '4px';
+      toggleLabel.appendChild(toggle);
+      toggleLabel.appendChild(document.createTextNode('同一施設のみ'));
+
+      if (!currentFacility) {
+        toggle.checked = false;
+        toggle.disabled = true;
+        toggleLabel.title = '施設が未入力のため絞り込みできません';
+      } else {
+        toggle.checked = sameFacilityOnly;
+        var members = Core.getSameGroupMembers(currentFacility, facilityGroups);
+        if (members.length >= 2) {
+          toggleLabel.title = '対象施設: ' + members.join('・');
+        }
+        toggle.addEventListener('change', function() {
+          sameFacilityOnly = toggle.checked;
+          Core.writeToggle(getStorage(), storageKey, sameFacilityOnly);
+        });
+      }
+      navContainer.insertBefore(toggleLabel, navContainer.firstChild);
+    }
 
     /**
-     * API検索用のクエリ文を作成する関数
+     * 絞り込み条件を組み立てる
      */
-    var getQuery = function(isNext) {
-      var op1 = isNext ? '>' : '<';
-      var op2 = isNext ? 'asc' : 'desc';
-      // 同じ日時/日付の場合はレコード番号で判定する複合条件
-      return '(' + targetFieldCode + ' ' + op1 + ' "' + currentDatetime + '") or (' + targetFieldCode + ' = "' + currentDatetime + '" and $id ' + op1 + ' ' + currentId + ') order by ' + targetFieldCode + ' ' + op2 + ', $id ' + op2 + ' limit 1';
+    var buildFilters = function() {
+      return Core.buildFilters({
+        sameFacilityOnly: sameFacilityOnly,
+        hasFacility: hasFacility,
+        currentFacility: currentFacility,
+        facilityFieldCode: facilityFieldCode,
+        facilityGroups: facilityGroups,
+        excludeFieldCode: excludeFieldCode,
+        excludeValues: excludeValues,
+        record: record
+      });
     };
 
     /**
      * レコード取得および画面遷移
      */
     var navigateRecord = function(isNext) {
-      var query = getQuery(isNext);
+      var f = buildFilters();
+      var query = Core.buildNavQuery({
+        targetFieldCode: targetFieldCode,
+        currentDatetime: currentDatetime,
+        currentId: currentId,
+        isNext: isNext,
+        filters: f.filters
+      });
+      if (query === null) {
+        alert('レコードの取得に失敗しました。');
+        return;
+      }
       kintone.api(kintone.api.url('/k/v1/records.json', true), 'GET', {
         app: appId,
         query: query,
@@ -113,8 +213,7 @@
           var targetId = resp.records[0].$id.value;
           location.href = '/k/' + appId + '/show#record=' + targetId;
         } else {
-          var msg = isNext ? 'これ以上新しいレコードはありません。' : 'これ以上古いレコードはありません。';
-          alert(msg);
+          alert(Core.buildNotFoundMessage(isNext, f.scopeMembers));
         }
       }).catch(function(err) {
         console.error('レコード取得エラー:', err);
