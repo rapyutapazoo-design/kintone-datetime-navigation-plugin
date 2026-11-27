@@ -102,6 +102,14 @@
     if (conf.excludeFieldCode) {
       $excludeSelect.value = conf.excludeFieldCode;
     }
+    // 保存済みのフィールドがアプリから削除・変更されていれば警告する
+    var missing = [];
+    if (conf.targetFieldCode && $select.value !== conf.targetFieldCode) missing.push('基準フィールド (' + conf.targetFieldCode + ')');
+    if (conf.facilityFieldCode && $facilitySelect.value !== conf.facilityFieldCode) missing.push('施設フィールド (' + conf.facilityFieldCode + ')');
+    if (conf.excludeFieldCode && $excludeSelect.value !== conf.excludeFieldCode) missing.push('除外判定フィールド (' + conf.excludeFieldCode + ')');
+    if (missing.length > 0) {
+      alert('保存済みの次のフィールドがアプリに見つかりません。再選択して保存してください。\n' + missing.join('\n'));
+    }
     renderFacilityOptions();
     renderExcludeOptions();
   });
@@ -125,6 +133,12 @@
       return;
     }
 
+    // (1b) 未選択のまま値だけ入力されていないか
+    if (!$facilitySelect.value && parsed.groups.length > 0) {
+      alert('施設グループを入力するには、施設フィールドを選択してください。');
+      return;
+    }
+
     // (2) グループ内の施設名が施設フィールドの選択肢に存在するか
     var facilityCode = $facilitySelect.value;
     var facilityNames = getOptionNames(facilityCode);
@@ -144,6 +158,10 @@
     var excludeValues = $excludeValuesText.value.split(/\r\n|\r|\n/).map(function(v) {
       return v.replace(/^\s+|\s+$/g, '');
     }).filter(function(v) { return v !== ''; });
+    if (!excludeCode && excludeValues.length > 0) {
+      alert('除外する値を入力するには、除外判定フィールドを選択してください。');
+      return;
+    }
     if (excludeCode && isChoiceType(excludeCode)) {
       var excludeNames = getOptionNames(excludeCode);
       if (excludeNames) {

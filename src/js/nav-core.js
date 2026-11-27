@@ -105,6 +105,29 @@
     return parts.join(' and ') + ' and (' + core + ')' + tail;
   }
 
+  // 絞り込み条件（同一施設・除外）を組み立てる
+  function buildFilters(opts) {
+    var filters = [];
+    var scopeMembers = [];
+    if (opts.sameFacilityOnly && opts.hasFacility && opts.currentFacility) {
+      scopeMembers = getSameGroupMembers(opts.currentFacility, opts.facilityGroups);
+      var facCond = buildInCondition(opts.facilityFieldCode, scopeMembers, false);
+      if (facCond) filters.push(facCond);
+    }
+    var exValues = opts.excludeValues || [];
+    if (opts.excludeFieldCode && exValues.length > 0) {
+      if (!opts.record || !opts.record[opts.excludeFieldCode]) {
+        if (typeof console !== 'undefined' && console.warn) {
+          console.warn('除外判定フィールド (' + opts.excludeFieldCode + ') が見つかりません。除外せずに検索します。');
+        }
+      } else {
+        var exCond = buildInCondition(opts.excludeFieldCode, exValues, true);
+        if (exCond) filters.push(exCond);
+      }
+    }
+    return { filters: filters, scopeMembers: scopeMembers };
+  }
+
   function buildNotFoundMessage(isNext, scopeMembers) {
     var word = isNext ? '新しい' : '古い';
     if (!Array.isArray(scopeMembers) || scopeMembers.length === 0) {
@@ -143,6 +166,7 @@
     getSameGroupMembers: getSameGroupMembers,
     buildInCondition: buildInCondition,
     buildNavQuery: buildNavQuery,
+    buildFilters: buildFilters,
     buildNotFoundMessage: buildNotFoundMessage,
     readToggle: readToggle,
     writeToggle: writeToggle

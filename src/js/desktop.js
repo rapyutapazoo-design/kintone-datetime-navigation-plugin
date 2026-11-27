@@ -41,6 +41,14 @@
     var record = event.record;
     var currentId = Number(record.$id.value);
     var isMobile = event.type === 'mobile.app.record.detail.show';
+
+    // SPA 内でレコードが切り替わった場合に古い日時・施設のまま残らないよう、
+    // 早期 return より前に既存コンテナとスワイプ用関数を破棄する
+    var oldContainer = document.getElementById('custom-datetime-nav-container');
+    if (oldContainer && oldContainer.parentNode) {
+      oldContainer.parentNode.removeChild(oldContainer);
+    }
+    window._mobileSwipeNavigateRecord = null;
     
     // 対象フィールドがレコード内に存在するかチェック
     if (!record[targetFieldCode]) {
@@ -68,14 +76,16 @@
       }
     }
 
-    if (!header || document.getElementById('custom-datetime-nav-container')) {
-      return event;
-    }
+    if (!header) return event;
+
+    var hasFacility = !!facilityFieldCode && !!record[facilityFieldCode];
+    var currentFacility = hasFacility ? record[facilityFieldCode].value : '';
 
     // ボタン格納用コンテナの作成
     var navContainer = document.createElement('div');
     navContainer.id = 'custom-datetime-nav-container';
-    if (isMobile) {
+    if (isMobile && hasFacility) {
+      // トグルを表示するときだけ折り返し配置にする（それ以外は従来どおり）
       navContainer.style.display = 'flex';
       navContainer.style.flexWrap = 'wrap';
       navContainer.style.gap = '8px';
@@ -84,6 +94,7 @@
       navContainer.style.display = 'inline-block';
       navContainer.style.marginLeft = '20px';
     }
+    var useFlex = isMobile && hasFacility;
 
     // ボタンの共通スタイル定義（既存のプロセス管理ボタンの横軸に綺麗に並ぶよう微調整）
     var applyBtnStyle = function(btn) {
@@ -101,7 +112,7 @@
     var prevButton = document.createElement('button');
     prevButton.innerText = '◀ 前のレコード';
     applyBtnStyle(prevButton);
-    prevButton.style.marginRight = '8px';
+    prevButton.style.marginRight = useFlex ? '0' : '8px'; // flex 時は gap で間隔を取る
 
     // 次へボタン
     var nextButton = document.createElement('button');
@@ -125,16 +136,13 @@
     // 「同一施設のみ」トグル（施設フィールド設定済みかつレコードに存在する場合のみ）
     var storageKey = 'dtnav:' + PLUGIN_ID + ':' + appId + ':sameFacility';
     var sameFacilityOnly = Core.readToggle(getStorage(), storageKey, false);
-    var hasFacility = !!facilityFieldCode && !!record[facilityFieldCode];
-    var currentFacility = hasFacility ? record[facilityFieldCode].value : '';
-
     if (hasFacility) {
       var toggleLabel = document.createElement('label');
       toggleLabel.style.display = 'inline-flex';
       toggleLabel.style.alignItems = 'center';
       toggleLabel.style.height = '40px';
       toggleLabel.style.verticalAlign = 'middle';
-      toggleLabel.style.marginRight = '12px';
+      toggleLabel.style.marginRight = isMobile ? '0' : '12px';
       toggleLabel.style.color = '#3498db';
       toggleLabel.style.fontSize = '14px';
       toggleLabel.style.cursor = 'pointer';
@@ -168,22 +176,16 @@
      * 絞り込み条件を組み立てる
      */
     var buildFilters = function() {
-      var filters = [];
-      var scopeMembers = [];
-      if (sameFacilityOnly && hasFacility && currentFacility) {
-        scopeMembers = Core.getSameGroupMembers(currentFacility, facilityGroups);
-        var facCond = Core.buildInCondition(facilityFieldCode, scopeMembers, false);
-        if (facCond) filters.push(facCond);
-      }
-      if (excludeFieldCode && excludeValues.length > 0) {
-        if (!record[excludeFieldCode]) {
-          console.warn('除外判定フィールド (' + excludeFieldCode + ') が見つかりません。除外せずに検索します。');
-        } else {
-          var exCond = Core.buildInCondition(excludeFieldCode, excludeValues, true);
-          if (exCond) filters.push(exCond);
-        }
-      }
-      return { filters: filters, scopeMembers: scopeMembers };
+      return Core.buildFilters({
+        sameFacilityOnly: sameFacilityOnly,
+        hasFacility: hasFacility,
+        currentFacility: currentFacility,
+        facilityFieldCode: facilityFieldCode,
+        facilityGroups: facilityGroups,
+        excludeFieldCode: excludeFieldCode,
+        excludeValues: excludeValues,
+        record: record
+      });
     };
 
     /**

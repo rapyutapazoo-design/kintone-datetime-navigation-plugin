@@ -148,3 +148,48 @@ test('nav-core.js は ES5 構文のみ', () => {
   assert.ok(!/\b(let|const)\s/.test(src), 'let/const');
   assert.ok(!/`/.test(src), 'template literal');
 });
+
+test('buildFilters の分岐', () => {
+  const groups = [['A', 'B'], ['C', 'D']];
+  const base = {
+    facilityFieldCode: 'facility', facilityGroups: groups,
+    excludeFieldCode: 'status', excludeValues: ['キャンセル済み'],
+    hasFacility: true, currentFacility: 'A',
+    record: { facility: { value: 'A' }, status: { value: 'x' } }
+  };
+  const run = (o) => Core.buildFilters(Object.assign({}, base, o));
+
+  // トグル OFF: 除外のみ
+  let r = run({ sameFacilityOnly: false });
+  assert.deepEqual(r.filters, ['status not in ("キャンセル済み")']);
+  assert.deepEqual(r.scopeMembers, []);
+
+  // トグル ON: 施設 + 除外
+  r = run({ sameFacilityOnly: true });
+  assert.deepEqual(r.filters, ['facility in ("A", "B")', 'status not in ("キャンセル済み")']);
+  assert.deepEqual(r.scopeMembers, ['A', 'B']);
+
+  // グループ外の施設は自身のみ
+  r = run({ sameFacilityOnly: true, currentFacility: 'Z' });
+  assert.equal(r.filters[0], 'facility in ("Z")');
+
+  // 施設が空: ON でも施設条件なし
+  r = run({ sameFacilityOnly: true, currentFacility: '' });
+  assert.deepEqual(r.filters, ['status not in ("キャンセル済み")']);
+  r = run({ sameFacilityOnly: true, hasFacility: false });
+  assert.deepEqual(r.scopeMembers, []);
+
+  // 除外フィールドがレコードに無い: 除外せず警告のみ
+  const origWarn = console.warn;
+  console.warn = () => {};
+  try {
+    r = run({ sameFacilityOnly: false, record: { facility: { value: 'A' } } });
+  } finally {
+    console.warn = origWarn;
+  }
+  assert.deepEqual(r.filters, []);
+
+  // すべて未設定
+  r = Core.buildFilters({ sameFacilityOnly: false, hasFacility: false, currentFacility: '', facilityFieldCode: '', facilityGroups: [], excludeFieldCode: '', excludeValues: [], record: {} });
+  assert.deepEqual(r.filters, []);
+});
