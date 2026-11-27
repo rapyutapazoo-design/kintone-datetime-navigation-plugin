@@ -158,7 +158,67 @@
     }
   }
 
+  // PC 詳細画面の標準レコード移動矢印（∧∨）コンテナ。実機で確認した厳密セレクタのみ（詳細画面側のツールバーに限定）
+  var ARROW_SELECTORS = [
+    '.gaia-argoui-app-show-toolbar .gaia-argoui-app-pager',
+    '.gaia-argoui-app-toolbar .gaia-argoui-app-pager'
+  ];
+
+  // 矢印として採用できる大きさか（非表示・未描画の要素は幅高さが 0）。rect は getBoundingClientRect 相当
+  function isUsableArrowRect(rect) {
+    return !!rect && rect.width > 0 && rect.height > 0;
+  }
+
+  // セレクタ候補を順に試し、最初に見つかった要素を返す（不正セレクタは無視、無ければ null）。
+  // accept（任意）を渡すと、それを満たす要素のみ採用する
+  function findFirstMatch(root, selectors, accept) {
+    if (!root || !Array.isArray(selectors)) return null;
+    var useAccept = typeof accept === 'function';
+    if (typeof root[useAccept ? 'querySelectorAll' : 'querySelector'] !== 'function') return null;
+    for (var i = 0; i < selectors.length; i++) {
+      try {
+        if (!useAccept) {
+          var el = root.querySelector(selectors[i]);
+          if (el) return el;
+          continue;
+        }
+        var list = root.querySelectorAll(selectors[i]);
+        for (var j = 0; j < list.length; j++) {
+          if (accept(list[j])) return list[j];
+        }
+      } catch (e) {
+        // 無効なセレクタは次の候補へ
+      }
+    }
+    return null;
+  }
+
+  // 同じ段とみなす中心線の高さの差(px)の上限
+  var SAME_ROW_MID_TOLERANCE = 10;
+
+  // wrapper が矢印の左隣（同じ段・重ならない）に収まっているか。rect は getBoundingClientRect 相当
+  function isLeftOnSameRow(wrapperRect, arrowRect) {
+    if (!wrapperRect || !arrowRect) return false;
+    if (wrapperRect.width === 0 && wrapperRect.height === 0) return false;
+    var wrapperMid = (wrapperRect.top + wrapperRect.bottom) / 2;
+    var arrowMid = (arrowRect.top + arrowRect.bottom) / 2;
+    var sameRow = Math.abs(wrapperMid - arrowMid) <= SAME_ROW_MID_TOLERANCE;
+    return sameRow && wrapperRect.right <= arrowRect.left + 1 && wrapperRect.left >= 0;
+  }
+
+  // 挿入によるレイアウト崩れか（ツールバー高さが増えた、または矢印の右端が画面幅を超えた）。値が数値でなければ判定しない
+  function didLayoutBreak(beforeHeight, afterHeight, arrowRight, viewportWidth) {
+    var isNum = function(v) { return typeof v === 'number' && isFinite(v); };
+    if (isNum(beforeHeight) && isNum(afterHeight) && afterHeight > beforeHeight) return true;
+    return isNum(arrowRight) && isNum(viewportWidth) && arrowRight > viewportWidth;
+  }
+
   var api = {
+    ARROW_SELECTORS: ARROW_SELECTORS,
+    isUsableArrowRect: isUsableArrowRect,
+    findFirstMatch: findFirstMatch,
+    isLeftOnSameRow: isLeftOnSameRow,
+    didLayoutBreak: didLayoutBreak,
     escapeQueryValue: escapeQueryValue,
     parseJsonArray: parseJsonArray,
     parseGroupsText: parseGroupsText,
