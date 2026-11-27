@@ -38,13 +38,14 @@
 
   // PC版: wrapper を標準のレコード移動矢印（∧∨）の左隣へ移す。
   // 矢印が見つからない／同じ段に収まらない場合は fallbackParent（従来のプロセス管理ボタンの下の段）のままにする
-  var ARROW_WAIT_MS = 5000;
   var placeNextToArrows = function(wrapper, fallbackParent) {
     if (window._dtnavPlaceCleanup) window._dtnavPlaceCleanup(); // 前回の監視・resize リスナーを破棄
 
     var rejected = false; // 矢印の左に収まらなかった場合 true（以後は従来位置に固定。resize で再判定）
     var busy = false;
     var disposed = false; // cleanup 済みなら true（以後のリスナー・監視は登録しない）
+    var toolbarEl = null; // 高さ監視の対象ツールバー（矢印の左に置いている間だけ保持）
+    var baseHeight = null; // 矢印の左へ置く直前のツールバー高さ（これより高くなったら崩れとみなす）
     var cleanup = null; // 下で定義（tryPlace からも呼ぶため先に宣言）
 
     var toFallback = function() {
@@ -52,6 +53,8 @@
       wrapper.style.marginLeft = '20px';
       wrapper.style.marginRight = '';
       wrapper.style.verticalAlign = '';
+      toolbarEl = null;
+      baseHeight = null;
     };
 
     var tryPlace = function() {
@@ -72,18 +75,22 @@
           return Core.isUsableArrowRect(el.getBoundingClientRect());
         });
         if (!arrow || !arrow.parentNode || arrow.contains(wrapper)) return;
-        // 挿入前後のツールバー高さ（table-cell の右セルが広がって左セルが潰れる崩れの検出用。測定は挿入時の1回のみ）
+        // ツールバー高さの前後比較（table-cell の右セルが広がって左セルが潰れる崩れの検出用）。
+        // 挿入時は挿入前後を測り、挿入済みの再判定（resize・再描画）では挿入前の高さと現在の高さを比べる
         var beforeHeight = null;
         var afterHeight = null;
-        var measured = null;
         if (wrapper.nextSibling !== arrow) {
-          measured = (arrow.closest && arrow.closest('.gaia-argoui-app-toolbar')) || fallbackParent;
-          beforeHeight = measured.offsetHeight;
+          toolbarEl = (arrow.closest && arrow.closest('.gaia-argoui-app-toolbar')) || arrow.parentNode;
+          baseHeight = toolbarEl.offsetHeight;
+          beforeHeight = baseHeight;
           arrow.parentNode.insertBefore(wrapper, arrow);
           wrapper.style.marginLeft = '0';
           wrapper.style.marginRight = '12px';
           wrapper.style.verticalAlign = 'middle';
-          afterHeight = measured.offsetHeight;
+          afterHeight = toolbarEl.offsetHeight;
+        } else if (toolbarEl && document.contains(toolbarEl)) {
+          beforeHeight = baseHeight;
+          afterHeight = toolbarEl.offsetHeight;
         }
         var arrowRect = arrow.getBoundingClientRect();
         if (!Core.isLeftOnSameRow(wrapper.getBoundingClientRect(), arrowRect) ||
@@ -97,8 +104,8 @@
     };
 
     var observer = null;
-    var timer = null;
     var rafId = null;
+    var mutationRafId = null;
     var lastWidth = window.innerWidth;
     var onResize = function() {
       // 幅が変わったときだけ、次の描画フレームで1回再判定する（収まらず従来位置にいる場合も、広がれば矢印の左へ戻す）
@@ -112,8 +119,8 @@
     };
     cleanup = function() {
       if (observer) { observer.disconnect(); observer = null; }
-      if (timer) { clearTimeout(timer); timer = null; }
       if (rafId !== null) { window.cancelAnimationFrame(rafId); rafId = null; }
+      if (mutationRafId !== null) { window.cancelAnimationFrame(mutationRafId); mutationRafId = null; }
       window.removeEventListener('resize', onResize);
       disposed = true;
       if (window._dtnavPlaceCleanup === cleanup) window._dtnavPlaceCleanup = null;
@@ -124,12 +131,16 @@
     if (disposed) return; // 初回判定で破棄された場合はリスナー・監視を登録しない
     window.addEventListener('resize', onResize);
     if (typeof MutationObserver === 'function') {
-      // kintone の描画は非同期なので、矢印の出現・再描画を一定時間だけ監視する（無限には待たない。5秒後は resize のみで再判定）
-      observer = new MutationObserver(function() { tryPlace(); });
+      // kintone の描画は非同期なので、矢印の出現・再描画を詳細画面にいる間は監視し続ける
+      // （画面を離れたら tryPlace が cleanup する）。変更通知は次の描画フレームに1回へまとめる
+      observer = new MutationObserver(function() {
+        if (mutationRafId !== null) return;
+        mutationRafId = window.requestAnimationFrame(function() {
+          mutationRafId = null;
+          tryPlace();
+        });
+      });
       observer.observe(document.body, { childList: true, subtree: true });
-      timer = setTimeout(function() {
-        if (observer) { observer.disconnect(); observer = null; }
-      }, ARROW_WAIT_MS);
     }
   };
 
